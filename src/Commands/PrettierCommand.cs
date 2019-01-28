@@ -2,6 +2,8 @@
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
+using DiffPlex.DiffBuilder.Model;
+using JavaScriptPrettier.Helpers;
 using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.OLE.Interop;
 using Microsoft.VisualStudio.Shell;
@@ -58,11 +60,65 @@ namespace JavaScriptPrettier
             if (string.IsNullOrEmpty(output) || input == output)
                 return false;
 
-            using (ITextEdit edit = _view.TextBuffer.CreateEdit())
+            DiffPaneModel diffPaneModel = Diff.BuildDiffModel(input, output);
+
             using (ITextUndoTransaction undo = _undoManager.TextBufferUndoHistory.CreateTransaction("Make Prettier"))
             {
-                edit.Replace(0, _view.TextBuffer.CurrentSnapshot.Length, output);
-                edit.Apply();
+                int inputPosition = 0;
+                int textBufferPosition = 0;
+                int newLineIndex = output.IndexOf('\n');
+                string newLine = newLineIndex > 0 && output[newLineIndex - 1] == '\r' ? "\r\n" : "\n";
+
+                bool NextLine()
+                {
+                    while (true)
+                    {
+                        if (inputPosition + 1 == input.Length)
+                            return false;
+
+                        inputPosition += 1;
+                        textBufferPosition += 1;
+
+                        if (input[inputPosition - 1] == '\n')
+                            return true;
+                    }
+                }
+
+                foreach (DiffPiece line in diffPaneModel.Lines)
+                {
+                    switch (line.Type)
+                    {
+                        case ChangeType.Deleted:
+                            using (ITextEdit edit = _view.TextBuffer.CreateEdit())
+                            {
+                                int start = textBufferPosition;
+                                NextLine();
+                                int end = textBufferPosition;
+
+                                edit.Delete(start, end - start);
+
+                                textBufferPosition = start;
+
+                                edit.Apply();
+                            }
+
+                            break;
+                        case ChangeType.Inserted:
+                            using (ITextEdit edit = _view.TextBuffer.CreateEdit())
+                            {
+                                edit.Insert(textBufferPosition, line.Text + newLine);
+
+                                textBufferPosition += line.Text.Length + newLine.Length;
+
+                                edit.Apply();
+                            }
+
+                            break;
+                        default:
+                            NextLine();
+                            break;
+                    }
+                }
 
                 undo.Complete();
             }
