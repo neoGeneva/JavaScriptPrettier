@@ -17,7 +17,7 @@ namespace JavaScriptPrettier.Helpers
 
             var differ = new Differ();
             var model = new DiffPaneModel();
-            DiffResult diffResult = differ.CreateLineDiffs(oldText, newText, ignoreWhitespace: false);
+            DiffResult diffResult = differ.CreateLineDiffs(oldText, newText, ignoreWhitespace: false, ignoreCase: false);
             BuildDiffPieces(diffResult, model.Lines);
             return model;
         }

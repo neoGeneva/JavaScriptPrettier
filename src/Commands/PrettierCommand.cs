@@ -66,21 +66,26 @@ namespace JavaScriptPrettier
             {
                 int inputPosition = 0;
                 int textBufferPosition = 0;
-                int newLineIndex = output.IndexOf('\n');
-                string newLine = newLineIndex > 0 && output[newLineIndex - 1] == '\r' ? "\r\n" : "\n";
+                int newLineIndex = output.IndexOfAny(new[] { '\r', '\n' });
+                //string newLine = newLineIndex == -1
+                //    ? Environment.NewLine
+                //    : newLineIndex < output.Length - 1 && output[newLineIndex] == '\r' && output[newLineIndex + 1] == '\n'
+                //    ? "\r\n"
+                //    : output[newLineIndex].ToString();
+                string newLine = Environment.NewLine;
 
                 bool NextLine()
                 {
                     while (true)
                     {
-                        if (inputPosition + 1 == input.Length)
-                            return false;
+                        if (inputPosition == input.Length)
+                            return true;
 
                         inputPosition += 1;
                         textBufferPosition += 1;
 
-                        if (input[inputPosition - 1] == '\n')
-                            return true;
+                        if (input[inputPosition - 1] == '\n' || input[inputPosition - 1] == '\r' && input[inputPosition] != '\n')
+                            return false;
                     }
                 }
 
@@ -92,8 +97,18 @@ namespace JavaScriptPrettier
                             using (ITextEdit edit = _view.TextBuffer.CreateEdit())
                             {
                                 int start = textBufferPosition;
-                                NextLine();
+                                bool isEof = NextLine();
                                 int end = textBufferPosition;
+
+                                if (isEof && diffPaneModel.Lines[diffPaneModel.Lines.Count - 1] == line)
+                                {
+                                    if (start - 2 > 0 && input[start - 1] == '\n' && input[start - 2] == '\r')
+                                        start -= 2;
+                                    if (start - 1 > 0 && input[start - 1] == '\n')
+                                        start -= 1;
+                                    if (start - 1 > 0 && input[start - 2] == '\r')
+                                        start -= 1;
+                                }
 
                                 edit.Delete(start, end - start);
 
@@ -106,9 +121,13 @@ namespace JavaScriptPrettier
                         case ChangeType.Inserted:
                             using (ITextEdit edit = _view.TextBuffer.CreateEdit())
                             {
-                                edit.Insert(textBufferPosition, line.Text + newLine);
+                                string newText = diffPaneModel.Lines[diffPaneModel.Lines.Count - 1] == line
+                                    ? line.Text
+                                    : line.Text + newLine;
 
-                                textBufferPosition += line.Text.Length + newLine.Length;
+                                edit.Insert(textBufferPosition, newText);
+
+                                textBufferPosition += newText.Length;
 
                                 edit.Apply();
                             }
